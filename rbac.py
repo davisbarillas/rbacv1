@@ -19,9 +19,9 @@ def main():
         roles = r.json()['response']
         #print(roles)
         #for role in roles:
-        #    if 'TEAM_DEFINED' in role.values():
+        #    if any('TEAM_MEMBER' in role.values()):
         #        user_team_role = role.get('id')
-        #        print(user_team_role)
+        #       print(user_team_role)
         with open("rbac.csv", "r") as csv_file:
             csvreader = csv.DictReader(csv_file)
             #for row in csvreader:
@@ -34,8 +34,10 @@ def main():
                 #print(user_email)
                 user_team = row.get('team')
                 #print(user_team)
-                user_role = row.get('role')
-                #print(user_role)
+                org_role = row.get('orgrole')
+                #print(org_role)
+                team_role = row.get('teamrole')
+                #print(team_role)
                 for team in teams:
                     #print(team)
                     if user_team in team.values():
@@ -51,7 +53,7 @@ def main():
                                                 "add_team_membership": [
                                                     {
                                                         "user_id_v2": str(user_id),
-                                                        "team_role": "6d5fbe08-0512-46e0-b5d2-45902ee6c0ba"
+                                                        "team_role": str(team_role)
                                                     }
                                                 ]
                                             }
@@ -59,6 +61,12 @@ def main():
                                 r = requests.put(url, headers=headers, json=payload)
                                 print(r.status_code)
                                 #print(roles)
+
+                                user_org_role_payload = {"org_role": str(org_role)}
+                                url = 'https://www.shiftleft.io/api/v4/orgs/{orgid}/rbac/users/{userid}'.format (orgid=SHIFTLEFT_ORG_ID, userid=user_id)
+                                r = requests.put(url, headers=headers, json=user_org_role_payload)
+                                print(r.status_code)
+                                #print
 
 
 if __name__ == "__main__":
