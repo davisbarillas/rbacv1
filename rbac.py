@@ -1,44 +1,69 @@
-#!/usr/bin/env python3
+ #!/usr/bin/env python3
 import csv
 import requests
 from config import SHIFTLEFT_ORG_ID, SHIFTLEFT_ACCESS_TOKEN
 
 def main():
+
     with requests.Session() as s:
+
+        #get existing Teams in ShiftLeft
         url = 'https://www.shiftleft.io/api/v4/orgs/{}/rbac/teams'.format(SHIFTLEFT_ORG_ID)
         headers = {'Authorization':'Bearer {}'.format(SHIFTLEFT_ACCESS_TOKEN)}
         r = requests.get(url, headers=headers)
         teams = r.json()['response']
         #print(teams)
+
+        #get existing Users in ShiftLeft
         url = 'https://www.shiftleft.io/api/v4/orgs/{}/rbac/users'.format(SHIFTLEFT_ORG_ID)
         r = requests.get(url, headers=headers)
         users = r.json()['response']
         #print(users)
+
+        #get all available roles in ShiftLeft
         url = 'https://www.shiftleft.io/api/v4/orgs/{}/rbac/roles'.format(SHIFTLEFT_ORG_ID)
         r = requests.get(url, headers=headers)
         roles = r.json()['response']
         #print(roles)
 
+
         with open("rbac.csv", "r") as csv_file:
             csvreader = csv.DictReader(csv_file)
-
             csvlist = []
             for x in csvreader:
                 csvlist.append(x)
-                #print(csvlist)
+            for row in csvlist:
+                user_team = row.get('team')
+                list_of_all_values = [value for elem in teams for value in elem.values()]
+                value = user_team
+                if value in list_of_all_values:
+                    print(f"Yes, Value: '{value}' exists in list of dictionaries")
+                else:
+                    print(f"No, Value: '{value}' does not exists in list of dictionaries")
+                    #if user team not in teams create this new team
+                    team_payload = {
+                            "name": str(user_team)
+                            }
+                    url = 'https://www.shiftleft.io/api/v4/orgs/{orgid}/rbac/teams'.format (orgid=SHIFTLEFT_ORG_ID)
+                    r = requests.post(url, headers=headers, json=team_payload)
+                    print("New team created.")    
+                    #get updated list of new teams - with the newly created team
+                    url = 'https://www.shiftleft.io/api/v4/orgs/{}/rbac/teams'.format(SHIFTLEFT_ORG_ID)
+                    headers = {'Authorization':'Bearer {}'.format(SHIFTLEFT_ACCESS_TOKEN)}
+                    r = requests.get(url, headers=headers)
+                    teams = r.json()['response']
 
+        with open("rbac.csv", "r") as csv_file:
+            csvreader = csv.DictReader(csv_file)
+            #print(csvreader)
+            csvlist = []
+            for x in csvreader:
+                csvlist.append(x)
             for row in csvlist:
                 user_email = row.get('email')
-                #useremail = next(dictionary for dictionary in users if dictionary["email"] == user_email)
-                #userrealemail = useremail.get('id_v2')
-                #print(userrealemail)
-                #print(useremail)
                 user_team = row.get('team')
                 org_role = row.get('orgrole')
                 team_role = row.get('teamrole')
-                #print(row)
-                #print(userid)
-
                 for user in users:
                     if user_email in user.values():
                         user_id = user.get('id_v2')
@@ -66,27 +91,6 @@ def main():
                                 print(teamupdate)
                                 teamchange = 'Updated team for {email} to {team}.'.format (email=user_email, team=user_team)
                                 print(teamchange)
-                        else:
-                                    team_payload = {
-                                                    "name": str(user_team),
-                                                        "team_membership": [
-                                                            {
-                                                                "user_id_v2": str(user_id),
-                                                                "team_role": str(team_role)
-                                                            }
-                                                        ]
-                                                    }
-                                    url = 'https://www.shiftleft.io/api/v4/orgs/{orgid}/rbac/teams'.format (orgid=SHIFTLEFT_ORG_ID)
-                                    r = requests.post(url, headers=headers, json=team_payload)
-                                    #print(r.status_code)
-                                    url = 'https://www.shiftleft.io/api/v4/orgs/{}/rbac/teams'.format(SHIFTLEFT_ORG_ID)
-                                    headers = {'Authorization':'Bearer {}'.format(SHIFTLEFT_ACCESS_TOKEN)}
-                                    r = requests.get(url, headers=headers)
-                                    teams = r.json()['response']
-                                    #print(teams)
-                                    #createteam = 'Created {teamname} and added user {email} to team.'.format (email=user_email, teamname=user_team)
-                                    #print(createteam)
-
 
 if __name__ == "__main__":
     """ This is executed when run from the command line """
