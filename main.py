@@ -1,9 +1,16 @@
 # !/usr/bin/env python3
 import csv
+import json
+import os
 import urllib
 
 import requests
-from config import SHIFTLEFT_ORG_ID, SHIFTLEFT_ACCESS_TOKEN
+
+try:
+    SHIFTLEFT_ORG_ID = os.environ["SHIFTLEFT_ORG_ID"]
+    SHIFTLEFT_ACCESS_TOKEN = os.environ["SHIFTLEFT_ACCESS_TOKEN"]
+except KeyError:
+    raise SystemExit("Oops! Do not forget to set both SHIFTLEFT_ORG_ID and SHIFTLEFT_ACCESS_TOKEN!")
 
 API_V4_BASE_URL = "https://www.shiftleft.io/api/v4/"
 API_V4_ORG_PATH = "orgs/{organization_id}/"
@@ -14,7 +21,7 @@ class SLAPIError:
     SLAPIError represents API error details returned by SL API v4
     """
 
-    def __init__(self, ok=False, code=0, message="", validation_errors=[]):
+    def __init__(self, ok=False, code=0, message="", validation_errors=()):
         self.ok = ok
         self.code = code
         self.message = message
@@ -33,10 +40,17 @@ class SLAPIError:
 
         return "server returned {} code without further information".format(self.code)
 
+def handle_success(resp):
+    response = ""
+    try:
+        response = resp.json()["response"]
+    except Exception:
+        response = ""
+    return response
 
 def handle_status_code(resp=None):
     """
-    handle_status_code intercepts the response and raises an appropriate error if is not a 200
+    handle_status_code intercepts the response and raises an appropriate error if it's not a 200
 
     :param resp: an http response as returned from requests library
     :return: None in case of success or raises an exception with details otherwise
@@ -45,7 +59,11 @@ def handle_status_code(resp=None):
         return
     if resp.status_code == 200:
         return
-    e = SLAPIError(**resp.json())
+    try:
+        json_decoded_body = resp.json()
+    except Exception:
+        raise Exception(resp.status_code)
+    e = SLAPIError(**json_decoded_body)
     raise Exception(e.as_string())
 
 
@@ -54,7 +72,9 @@ class SLResponse:
     Is an implementation of the base 200 response provided by all ShiftLeft API v4 endpoints.
     """
 
-    def __init__(self, ok=True, response={}):
+    def __init__(self, ok=True, response=None):
+        if response is None:
+            response = {}
         self.ok = ok
         self.response = response
 
@@ -64,7 +84,7 @@ class SLTeamMembership:
     SLTeamMembership contains the membership details for a user in a team.
     """
 
-    def __init__(self, team_name="", team_id="", role="", role_name="", role_aliases=[]) -> None:
+    def __init__(self, team_name="", team_id="", role="", role_name="", role_aliases=[], **kwargs):
         self.team_name = team_name
         self.team_id = team_id
         self.role = role
@@ -78,7 +98,7 @@ class SLUser:
     https://docs.shiftleft.io/api/#operation/ListOrgRBACUsers
     """
 
-    def __init__(self, name="", email="", id_v2="", team_membership=[]):
+    def __init__(self, name="", email="", id_v2="", team_membership=()):
         self.name = name
         self.email = email
         self.id_v2 = id_v2
@@ -86,8 +106,9 @@ class SLUser:
 
     def is_member(self, team=""):
         for tm in self.team_membership:
-            if tm.team_name == tm:
+            if tm.team_name == team:
                 return True
+        return False
 
 
 class SLListUsersResponse:
@@ -96,12 +117,13 @@ class SLListUsersResponse:
     https://docs.shiftleft.io/api/#operation/ListOrgRBACUsers
     """
 
-    def __init__(self, users=[]):
+    def __init__(self, users=()):
         self.users = [SLUser(**u) for u in users]
 
     def id_for_email(self, user_email=""):
+        user_email = user_email.lower()
         for u in self.users:
-            if u.email.lower() == user_email.lower():
+            if u.email.lower() == user_email:
                 return u.id_v2
 
     def user_for_id(self, user_id=""):
@@ -116,23 +138,33 @@ class SLTeamInfo:
     https://docs.shiftleft.io/api/#operation/ListTeams
     """
 
-    def __init__(self, team_id="", team_name=""):
+    def __init__(self, team_id="", team_name="", team_version=""):
         self.team_id = team_id
         self.team_name = team_name
+        self.team_version = team_version
 
 
 class SLTeams:
     """
     SLTeams represents a group of teams, typically of a same organization.
     """
-
-    def __init__(self, teams=[]):
+    
+    def __init__(self, teams=()):
         self.teams = [SLTeamInfo(**team) for team in teams]
 
     def __contains__(self, item):
+        print(item)
         for tm in self.teams:
+            print(tm.team_name)
             if tm.team_name == item:
                 return True
+
+    def get_id(self, item):
+            print(item)
+            for tm in self.teams:
+                print(tm.team_name)
+                if tm.team_name == item:
+                    return tm.team_id
 
     def append(self, team):
         self.teams.append(team)
@@ -145,26 +177,32 @@ class SLAPIClient:
     """
 
     def __init__(self, access_token="", organization_id=""):
-        self.__access_header = {'Authorization': 'Bearer {}'.format(access_token)}
+        self.__access_header = {'Authorization': 'Bearer {}'.format(access_token), 'Content-Type': 'application/json'}
         self.__organization_id = organization_id
 
     def _do_get(self, api_path):
         u = API_V4_BASE_URL + API_V4_ORG_PATH.format(organization_id=self.__organization_id) + api_path
-        resp = requests.get(u, self.__access_header)
+        resp = requests.get(u, headers=self.__access_header)
         handle_status_code(resp)
-        return resp.json().get('response', None)
+        return handle_success(resp)
+        #return resp.json().get('response', None)
 
     def _do_post(self, api_path, payload=None):
-        u = API_V4_BASE_URL + api_path
-        resp = requests.post(u, self.__access_header, payload)
+        u = API_V4_BASE_URL + API_V4_ORG_PATH.format(organization_id=self.__organization_id) + api_path
+        resp = requests.post(u, headers=self.__access_header, data=json.dumps(payload))
         handle_status_code(resp)
-        return resp.json().get('response', None)
+        return handle_success(resp)
+        #return resp.json().get('response', None)
 
     def _do_put(self, api_path, payload=None):
-        u = API_V4_BASE_URL + api_path
-        resp = requests.put(u, self.__access_header, payload)
+        u = API_V4_BASE_URL + API_V4_ORG_PATH.format(organization_id=self.__organization_id) + api_path
+        print(json.dumps(payload))
+        resp = requests.put(u, headers=self.__access_header, data=json.dumps(payload))
         handle_status_code(resp)
-        return resp.json().get('response', None)
+        return handle_success(resp)
+        #if resp.text == "":
+        #    return None
+        #return resp.json().get('response', None)
 
     def list_users(self):
         """
@@ -201,9 +239,10 @@ class SLAPIClient:
         return SLTeamInfo(team_id=resp["team_id"], team_name=name)
 
     def assign_user_organization_role(self, user_id="", role=""):
+        print(user_id)
         """
         assign_user_organization_role will assign the role passed to the user at an organization level
-
+    
         :param user_id: the id v2 of the user
         :param role: the role id or alias the user will have at an organization level
         :return: a dictionary of the json response from the call.
@@ -250,15 +289,14 @@ class SLAPIClient:
         :return: a dictionary of the json response from the call.
         """
         add_to_team = []
+        #import pdb; pdb.set_trace()
         for user_id, role in user_role_pairs:
             add_to_team.append({"user_id_v2": user_id,
                                 "team_role": role})
         version = self.current_team_version(team)
         payload = {
             "version": version,
-            "add_team_membership": [
-                add_to_team
-            ]
+            "add_team_membership": add_to_team
         }
         self._do_put("rbac/teams/{team}".format(team=team), payload)
 
@@ -279,6 +317,7 @@ def main():
     api_v4 = SLAPIClient(SHIFTLEFT_ACCESS_TOKEN, SHIFTLEFT_ORG_ID)
 
     teams = api_v4.list_teams()
+    print(teams)
     users = api_v4.list_users()
 
     add_to_teams = {}
@@ -292,8 +331,8 @@ def main():
             if user.team in teams:
                 print("Team {} exists for this organization".format(user.team))
             else:
-                print("Team '{}' does not exist for this organization,"
-                      " we will create it and assign '{}'".format(user.team, user.email))
+                print("Team '{}' does not exist for this organization;"
+                      " creating it and assigning '{}' to it".format(user.team, user.email))
                 teams.append(api_v4.create_team(user.team))
 
             # Assign the user organization wide role.
@@ -303,7 +342,10 @@ def main():
                                                                                 org_role=user.organization_role))
 
             # Queue the users to add for each team to economize requests
-            add_to_teams[user.team] = (user_id, user.team_role)
+            team_id = teams.get_id(user.team)
+            if user.team not in add_to_teams:
+                add_to_teams[team_id] = []
+            add_to_teams[team_id].append ((user_id, user.team_role))
 
     # Process team membership changes
     for team, info in add_to_teams.items():
@@ -312,7 +354,7 @@ def main():
         for user_id, team_role in info:
             u = users.user_for_id(user_id)
             # is_member works because users info was obtained before making any changes so it depicts initial state.
-            action = "Updated team membership of " if u.is_member(team) else "Added membership of "
+            action = "Updated team membership of" if u.is_member(team) else "Added membership of"
             print('* {action} {email} with role {teamrole}.'.format(action=action, email=u.email, teamrole=team_role))
 
 
