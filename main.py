@@ -153,16 +153,16 @@ class SLTeams:
         self.teams = [SLTeamInfo(**team) for team in teams]
 
     def __contains__(self, item):
-        print(item)
+        #print(item)
         for tm in self.teams:
-            print(tm.team_name)
+            #print(tm.team_name)
             if tm.team_name == item:
                 return True
 
     def get_id(self, item):
-            print(item)
+            #print(item)
             for tm in self.teams:
-                print(tm.team_name)
+                #print(tm.team_name)
                 if tm.team_name == item:
                     return tm.team_id
 
@@ -196,7 +196,7 @@ class SLAPIClient:
 
     def _do_put(self, api_path, payload=None):
         u = API_V4_BASE_URL + API_V4_ORG_PATH.format(organization_id=self.__organization_id) + api_path
-        print(json.dumps(payload))
+        #print(json.dumps(payload))
         resp = requests.put(u, headers=self.__access_header, data=json.dumps(payload))
         handle_status_code(resp)
         return handle_success(resp)
@@ -239,7 +239,7 @@ class SLAPIClient:
         return SLTeamInfo(team_id=resp["team_id"], team_name=name)
 
     def assign_user_organization_role(self, user_id="", role=""):
-        print(user_id)
+        #print(user_id)
         """
         assign_user_organization_role will assign the role passed to the user at an organization level
     
@@ -317,7 +317,7 @@ def main():
     api_v4 = SLAPIClient(SHIFTLEFT_ACCESS_TOKEN, SHIFTLEFT_ORG_ID)
 
     teams = api_v4.list_teams()
-    print(teams)
+    #print(teams)
     users = api_v4.list_users()
 
     add_to_teams = {}
@@ -329,10 +329,10 @@ def main():
             user = CSVUser(**row)
             # Create the team this user should belong to if it doesn't exist
             if user.team in teams:
-                print("Team {} exists for this organization".format(user.team))
+                print("Team {} exists for this organization.".format(user.team))
             else:
                 print("Team '{}' does not exist for this organization;"
-                      " creating it and assigning '{}' to it".format(user.team, user.email))
+                      " creating it and assigning '{}' to it.".format(user.team, user.email))
                 teams.append(api_v4.create_team(user.team))
 
             # Assign the user organization wide role.
