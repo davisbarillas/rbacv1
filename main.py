@@ -43,7 +43,7 @@ class SLAPIError:
 def handle_success(resp):
     response = ""
     try:
-        response = resp.json()["response"]
+        response = resp.json().get("response", {})
     except Exception:
         response = ""
     return response
