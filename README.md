@@ -1,6 +1,6 @@
 # rbacv1
 
-You will need your ShiftLeft ORG ID and Access Token (personal access token not CI token)
+You will need your ShiftLeft ORG ID and Access Token (personal access token not CI token).
 
 The users defined in the CSV should be verified users, either through email invite or SSO provisioning. 
 
